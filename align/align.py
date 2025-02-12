@@ -57,6 +57,7 @@ class NeedlemanWunsch:
         # Generating substitution matrix
         self.sub_dict = self._read_sub_matrix(sub_matrix_file) # substitution dictionary
 
+
     def _read_sub_matrix(self, sub_matrix_file):
         """
         DO NOT MODIFY THIS METHOD! IT IS ALREADY COMPLETE!
@@ -128,12 +129,46 @@ class NeedlemanWunsch:
         
         # TODO: Initialize matrix private attributes for use in alignment
         # create matrices for alignment scores, gaps, and backtracing
-        pass
+        rows, cols = len(seqA) + 1, len(seqB) + 1
 
+        # Initialize matrices with zeros and dtype=object to store characters
+        self._align_matrix = np.zeros((rows, cols), dtype=np.float64)
+        self._gapA_matrix = np.zeros((rows, cols), dtype=np.float64)
+        self._gapB_matrix = np.zeros((rows, cols), dtype=np.float64)
+
+        # Fill the first row with characters from seqA
+        for j in range(1, cols):
+            self._align_matrix[0, j] = self.gap_open + self.gap_extend * j
+
+        # Fill the first column with characters from seqB
+        for i in range(1, rows):
+            self._align_matrix[i, 0] = self.gap_open + self.gap_extend * i
+
+        # Copy initial values to gap matrices (if required for algorithm)
+        self._gapA_matrix[:, :] = self._align_matrix
+        self._gapB_matrix[:, :] = self._align_matrix
         
-        # TODO: Implement global alignment here
-        pass      		
-        		    
+
+        for i in range(1, rows):
+            for j in range(1, cols):
+
+                 # Substitution score (match/mismatch)
+                blosum_score = self.sub_dict.get((seqA[i-1].upper(), seqB[j-1].upper()), self.sub_dict.get((seqB[j-1].upper(), seqA[i-1].upper()), -4)) 
+                match_score = self._align_matrix[i-1, j-1] + blosum_score
+                a = self._gapA_matrix[i-1][j-1] + blosum_score
+                b = self._gapB_matrix[i-1][j-1] + blosum_score
+
+                # Compute gap scores
+                gapA_score = max(self._align_matrix[i-1, j] + self.gap_open + self.gap_extend, self._gapA_matrix[i-1, j] + self.gap_extend)
+                gapB_score = max(self._align_matrix[i, j-1] + self.gap_open + self.gap_extend, self._gapB_matrix[i, j-1] + self.gap_extend)
+
+                # Compute alignment score (M[i, j])
+                self._align_matrix[i, j] = max(match_score, a, b)
+
+                # Fill in the gap matrices
+                self._gapA_matrix[i, j] = gapA_score
+                self._gapB_matrix[i, j] = gapB_score
+	    
         return self._backtrace()
 
     def _backtrace(self) -> Tuple[float, str, str]:
@@ -150,7 +185,34 @@ class NeedlemanWunsch:
          	(alignment score, seqA alignment, seqB alignment) : Tuple[float, str, str]
          		the score and corresponding strings for the alignment of seqA and seqB
         """
-        pass
+        i = len(self._seqA)
+        j = len(self._seqB)
+
+        while i > 0 or j > 0:
+            blosum_score = self.sub_dict.get((self._seqA[i-1].upper(), self._seqB[j-1].upper()), 
+                                         self.sub_dict.get((self._seqB[j-1].upper(), self._seqA[i-1].upper()), -4))
+
+            # Case 1: Match/Mismatch
+            if i > 0 and j > 0 and self._align_matrix[i, j] == self._align_matrix[i-1, j-1] + blosum_score:
+                self.seqA_align = self._seqA[i - 1] + self.seqA_align
+                self.seqB_align = self._seqB[j - 1] + self.seqB_align
+                i -= 1
+                j -= 1
+            
+            # Case 2: Gap in sequence B (Insertion in A)
+            elif i > 0 and self._align_matrix[i, j] == self._align_matrix[i-1, j] + self.gap_open + self.gap_extend:
+                self.seqA_align = self._seqA[i - 1] + self.seqA_align
+                self.seqB_align = '-' + self.seqB_align
+                i -= 1
+            
+            # Case 3: Gap in sequence A (Insertion in B)
+            elif j > 0 and self._align_matrix[i, j] == self._align_matrix[i, j-1] + self.gap_open + self.gap_extend:
+                self.seqA_align = '-' + self.seqA_align
+                self.seqB_align = self._seqB[j - 1] + self.seqB_align
+                j -= 1
+        
+        
+        self.alignment_score = int(self._align_matrix[-1, -1])
 
         return (self.alignment_score, self.seqA_align, self.seqB_align)
 
