@@ -33,19 +33,11 @@ def main():
         aln_score[species] = score
 
     # Sort the dictionary by alignment score in descending order (most similar species first)
-    sorted_dict = sorted(aln_score.items(), key=lambda x:x[1])
+    sorted_dict = sorted(aln_score.items(), key=lambda x:x[1], reverse=True)
 
     # Print the species name and its alignment score
     for key, v in sorted_dict:
         print(f"Species: {key}\nAlignment score: {v}\n")
-
-    seq3, _ = read_fasta("./data/test_seq3.fa")
-    seq4, _ = read_fasta("./data/test_seq4.fa") 
-
-    sc, s3, s4 = al.align(seq3, seq4)
-    print(sc)
-    print(s3)
-    print(s4)
 
 
 if __name__ == "__main__":
