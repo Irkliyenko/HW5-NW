@@ -131,43 +131,48 @@ class NeedlemanWunsch:
         # create matrices for alignment scores, gaps, and backtracing
         rows, cols = len(seqA) + 1, len(seqB) + 1
 
-        # Initialize matrices with zeros and dtype=object to store characters
+        # Initialize matrices 
         self._align_matrix = np.zeros((rows, cols), dtype=np.float64)
         self._gapA_matrix = np.zeros((rows, cols), dtype=np.float64)
         self._gapB_matrix = np.zeros((rows, cols), dtype=np.float64)
+        self._back = np.full((rows, cols), "", dtype=object)  # Backtracking matrix
 
         # Fill the first row with characters from seqA
         for j in range(1, cols):
             self._align_matrix[0, j] = self.gap_open + self.gap_extend * j
+            self._gapA_matrix[0, j] = self.gap_open + j * self.gap_extend
+            self._gapB_matrix[0, j] = float("-inf")  # No vertical move possible
+            self._back[0, j] = "L"  # Left
 
         # Fill the first column with characters from seqB
         for i in range(1, rows):
             self._align_matrix[i, 0] = self.gap_open + self.gap_extend * i
-
-        # Copy initial values to gap matrices (if required for algorithm)
-        self._gapA_matrix[:, :] = self._align_matrix
-        self._gapB_matrix[:, :] = self._align_matrix
-        
+            self._gapA_matrix[i, 0] = float("-inf")  # No horizontal move possible
+            self._gapB_matrix[i, 0] = self.gap_open + i * self.gap_extend
+            self._back[i, 0] = "U"  # Up
 
         for i in range(1, rows):
             for j in range(1, cols):
+                blosum_score = self.sub_dict.get((seqA[i-1].upper(), seqB[j-1].upper()), -4)
 
-                 # Substitution score (match/mismatch)
-                blosum_score = self.sub_dict.get((seqA[i-1].upper(), seqB[j-1].upper()), self.sub_dict.get((seqB[j-1].upper(), seqA[i-1].upper()), -4)) 
+                # Compute match/mismatch
                 match_score = self._align_matrix[i-1, j-1] + blosum_score
-                a = self._gapA_matrix[i-1][j-1] + blosum_score
-                b = self._gapB_matrix[i-1][j-1] + blosum_score
 
-                # Compute gap scores
-                gapA_score = max(self._align_matrix[i-1, j] + self.gap_open + self.gap_extend, self._gapA_matrix[i-1, j] + self.gap_extend)
-                gapB_score = max(self._align_matrix[i, j-1] + self.gap_open + self.gap_extend, self._gapB_matrix[i, j-1] + self.gap_extend)
+                # Compute gap scores with affine penalties
+                self._gapA_matrix[i, j] = max(self._align_matrix[i-1, j] + self.gap_open+self.gap_extend, self._gapA_matrix[i-1, j] + self.gap_extend)
+                self._gapB_matrix[i, j] = max(self._align_matrix[i, j-1] + self.gap_open+self.gap_extend, self._gapB_matrix[i, j-1] + self.gap_extend)
 
-                # Compute alignment score (M[i, j])
-                self._align_matrix[i, j] = max(match_score, a, b)
+                # Compute alignment score
+                max_score = max(match_score, self._gapA_matrix[i, j], self._gapB_matrix[i, j])
+                self._align_matrix[i, j] = max_score
 
-                # Fill in the gap matrices
-                self._gapA_matrix[i, j] = gapA_score
-                self._gapB_matrix[i, j] = gapB_score
+                # Store the best move in `_back` matrix
+                if max_score == match_score:
+                    self._back[i, j] = "D"  # Diagonal
+                elif max_score == self._gapA_matrix[i, j]:
+                    self._back[i, j] = "U"  # Up
+                else:
+                    self._back[i, j] = "L"  # Left
 	    
         return self._backtrace()
 
@@ -189,32 +194,27 @@ class NeedlemanWunsch:
         j = len(self._seqB)
 
         while i > 0 or j > 0:
-            blosum_score = self.sub_dict.get((self._seqA[i-1].upper(), self._seqB[j-1].upper()), 
-                                         self.sub_dict.get((self._seqB[j-1].upper(), self._seqA[i-1].upper()), -4))
 
-            # Case 1: Match/Mismatch
-            if i > 0 and j > 0 and self._align_matrix[i, j] == self._align_matrix[i-1, j-1] + blosum_score:
+            if self._back[i, j] == "D":  # Diagonal (Match/Mismatch)
                 self.seqA_align = self._seqA[i - 1] + self.seqA_align
                 self.seqB_align = self._seqB[j - 1] + self.seqB_align
                 i -= 1
                 j -= 1
-            
-            # Case 2: Gap in sequence B (Insertion in A)
-            elif i > 0 and self._align_matrix[i, j] == self._align_matrix[i-1, j] + self.gap_open + self.gap_extend:
+
+            elif self._back[i, j] == "U":  # Up (Gap in seqB)
                 self.seqA_align = self._seqA[i - 1] + self.seqA_align
-                self.seqB_align = '-' + self.seqB_align
+                self.seqB_align = "-" + self.seqB_align
                 i -= 1
-            
-            # Case 3: Gap in sequence A (Insertion in B)
-            elif j > 0 and self._align_matrix[i, j] == self._align_matrix[i, j-1] + self.gap_open + self.gap_extend:
-                self.seqA_align = '-' + self.seqA_align
+
+            elif self._back[i, j] == "L":  # Left (Gap in seqA)
+                self.seqA_align = "-" + self.seqA_align
                 self.seqB_align = self._seqB[j - 1] + self.seqB_align
                 j -= 1
-        
-        
-        self.alignment_score = int(self._align_matrix[-1, -1])
+
+        self.alignment_score = int(self._align_matrix[len(self._seqA), len(self._seqB)])
 
         return (self.alignment_score, self.seqA_align, self.seqB_align)
+        
 
 
 def read_fasta(fasta_file: str) -> Tuple[str, str]:
