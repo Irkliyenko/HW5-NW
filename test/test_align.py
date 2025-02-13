@@ -83,7 +83,9 @@ def test_nw_backtrace():
 
     # Test if the sequences after backtracing have the same length and follow expected alignment rules
     assert len(seq3_aln) == len(seq4_aln), "Aligned sequences should have the same length"
-    #assert all(c1 == '-' or c2 == '-' or c1 == c2 for c1, c2 in zip(seq3_aln, seq4_aln)), "Alignment does not follow expected behavior"
 
     # Test the score
     assert score == 17, "Alignment score isn't correct"
+
+    # Test the backtraced sequence
+    assert seq4_aln == "M---QLIRHP", "Aligned sequence isn't correct"
